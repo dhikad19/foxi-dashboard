@@ -1,0 +1,141 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── AUTH ───────────────────────────────────────────────
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  username     String    @unique
+  password     String
+  avatar       String?
+  isOnline     Boolean   @default(false)
+  lastSeen     DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  refreshTokens RefreshToken[]
+  sentMessages   Message[]        @relation("SentMessages")
+  memberships    RoomMember[]
+  notifications  Notification[]
+  uploads        Upload[]
+  pushSubscriptions PushSubscription[]
+
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  revoked   Boolean  @default(false)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("refresh_tokens")
+}
+
+// ─── CHAT ────────────────────────────────────────────────
+model Room {
+  id          String     @id @default(cuid())
+  name        String?
+  isGroup     Boolean    @default(false)
+  avatar      String?
+  description String?
+  createdBy   String
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  members     RoomMember[]
+  messages    Message[]
+
+  @@map("rooms")
+}
+
+model RoomMember {
+  id       String   @id @default(cuid())
+  roomId   String
+  userId   String
+  role     String   @default("member") // admin | member
+  joinedAt DateTime @default(now())
+
+  room Room @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([roomId, userId])
+  @@map("room_members")
+}
+
+model Message {
+  id         String    @id @default(cuid())
+  roomId     String
+  senderId   String
+  content    String?
+  type       String    @default("text") // text | image | file | system
+  fileUrl    String?
+  fileName   String?
+  fileSize   Int?
+  replyToId  String?
+  deletedAt  DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  room    Room    @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  sender  User    @relation("SentMessages", fields: [senderId], references: [id])
+  replyTo Message? @relation("ReplyTo", fields: [replyToId], references: [id])
+  replies Message[] @relation("ReplyTo")
+
+  @@map("messages")
+}
+
+// ─── NOTIFIKASI ───────────────────────────────────────────
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  type      String   // message | mention | system | friend_request
+  title     String
+  body      String
+  data      Json?    // payload tambahan (roomId, senderId, dll)
+  isRead    Boolean  @default(false)
+  readAt    DateTime?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notifications")
+}
+
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("push_subscriptions")
+}
+
+// ─── FILE UPLOAD ──────────────────────────────────────────
+model Upload {
+  id        String   @id @default(cuid())
+  userId    String
+  filename  String
+  mimetype  String
+  size      Int
+  url       String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("uploads")
+}
